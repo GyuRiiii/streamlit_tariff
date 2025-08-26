@@ -185,7 +185,7 @@ def main():
                     if not filtered:
                         st.warning("검색 결과가 없습니다. 다시 입력해주세요.")
                         filtered = COUNTRIES
-
+        
                     sel_cty = st.selectbox("국가 선택", sorted(filtered))
                     if "국가" in df_sel_2025.columns and "적용국가구분" in df_sel_2025.columns:
                         base = df_sel_2025[df_sel_2025["적용국가구분"] == "1"]  # 전체 국가 공통
@@ -193,20 +193,32 @@ def main():
                         country_rows = df_sel_2025.loc[mask]
                         cut_cty = pd.concat([base, country_rows], ignore_index=True)
                         cut_cty = cut_cty.drop_duplicates(subset=[c for c in ["관세율구분값","관세율"] if c in cut_cty.columns])
-
+        
                         cols_cty = [c for c in ["관세율구분","관세율구분값","관세율"] if c in cut_cty.columns]
                         if cut_cty.empty or not cols_cty:
                             st.info(f"{sel_cty} 관련 협정 데이터가 없습니다.")
                         else:
-                            # 관세율 정렬 키 확보
-                            sort_key = "관세율"
+                            # 1) 정렬 키 안전 선택
                             if "관세율_num" in cut_cty.columns:
                                 sort_key = "관세율_num"
-                            st.dataframe(
-                                cut_cty[cols_cty].sort_values(sort_key),
-                                use_container_width=True,
-                                hide_index=True
-                            )
+                                to_show = cut_cty.sort_values(sort_key, na_position="last")
+                            elif "관세율" in cut_cty.columns:
+                                # 관세율이 문자열일 수 있어 임시 숫자 컬럼으로 정렬
+                                tmp = cut_cty.assign(
+                                    __관세율_num_tmp=pd.to_numeric(
+                                        cut_cty["관세율"].astype(str).str.replace(",", ""), errors="coerce"
+                                    )
+                                )
+                                sort_key = "__관세율_num_tmp"
+                                to_show = tmp.sort_values(sort_key, na_position="last").drop(columns=[sort_key])
+                            else:
+                                # 정렬 기준이 없으면 첫 표시 컬럼으로 정렬
+                                sort_key = cols_cty[0]
+                                to_show = cut_cty.sort_values(sort_key, na_position="last")
+        
+                            # 2) 정렬 후에 표시 컬럼만 선택 (KeyError 방지 포인트!)
+                            to_show = to_show[cols_cty]
+                            st.dataframe(to_show, use_container_width=True, hide_index=True)
                     else:
                         st.info("데이터에 '국가' 또는 '적용국가구분' 컬럼이 없습니다.")
 
